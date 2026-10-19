@@ -1,0 +1,33 @@
+# Render Blueprint for the backend API (frontend deploys separately to Vercel).
+# Secrets marked sync:false are entered in the Render dashboard, never committed.
+services:
+  - type: web
+    name: rag-platform-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/v1/health
+    plan: standard            # the cross-encoder needs ~1 GB RAM headroom; free plans may OOM
+    disk:                     # persists SQLite metadata + HF model cache across deploys
+      name: rag-data
+      mountPath: /app/data
+      sizeGB: 1
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DATA_DIR
+        value: /app/data
+      - key: HF_HOME
+        value: /app/data/hf-cache
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: API_KEY
+        sync: false
+      - key: QDRANT_URL          # managed Qdrant (e.g. Qdrant Cloud)
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: CORS_ORIGINS        # e.g. https://your-app.vercel.app
+        sync: false
+      - key: LOG_LEVEL
+        value: INFO

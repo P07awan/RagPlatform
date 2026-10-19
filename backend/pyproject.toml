@@ -1,0 +1,48 @@
+[project]
+name = "rag-platform-backend"
+version = "1.0.0"
+description = "Production RAG platform API: hybrid retrieval, reranking, grounded answers, RAGAS evaluation"
+requires-python = ">=3.11,<3.14"
+readme = "README.md"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = [".venv", "data"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "ASYNC", "S", "RUF"]
+ignore = [
+  "B008",    # FastAPI Depends() in defaults is idiomatic
+  "S101",    # asserts are used for type narrowing
+  "RUF001",  # unicode in strings (ellipsis/dashes) is intentional
+  "RUF002",
+  "RUF003",
+  "ASYNC230", # sync file IO is wrapped in to_thread where it matters
+  "SIM905",   # str.split() word lists read better than long list literals
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["S", "B", "ASYNC"]
+"scripts/**" = ["S", "T20"]
+# Column names in f-string SQL come from internal dicts, never from request input;
+# all values are bound parameters.
+"app/storage/sqlite_store.py" = ["S608"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+addopts = "-ra -m 'not openai and not slow and not qdrant_server'"
+markers = [
+  "openai: requires a real OPENAI_API_KEY (incurs API cost)",
+  "slow: downloads/loads the real cross-encoder model",
+  "qdrant_server: requires a running Qdrant server at QDRANT_URL",
+]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+  "ignore:Payload indexes have no effect:UserWarning",
+]

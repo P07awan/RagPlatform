@@ -1,0 +1,4 @@
+# Keep LF in the repo so Dockerfiles, shell commands and configs work in Linux containers.
+* text=auto eol=lf
+*.webp binary
+*.png binary

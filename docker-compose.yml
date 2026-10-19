@@ -1,0 +1,74 @@
+# Full local stack: Qdrant + backend + frontend (+ optional Redis via the "cache" profile).
+#
+#   docker compose up -d --build                 # without Redis
+#   docker compose --profile cache up -d --build # with Redis (also set ENABLE_CACHE=true)
+#
+# Secrets come from backend/.env (copy backend/.env.example). Inside the compose network
+# the backend reaches Qdrant at http://qdrant:6333 (service name, not localhost).
+
+name: rag-platform
+
+services:
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    ports:
+      - "127.0.0.1:6333:6333"   # REST + dashboard, bound to localhost only
+    volumes:
+      - qdrant_data:/qdrant/storage
+    healthcheck:
+      # The image has no curl/wget; probe the HTTP port with bash's /dev/tcp.
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/6333 && printf \"GET /readyz HTTP/1.0\\r\\n\\r\\n\" >&3 && grep -q 200 <&3'"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7.4-alpine
+    profiles: ["cache"]
+    command: ["redis-server", "--save", "", "--appendonly", "no", "--maxmemory", "128mb", "--maxmemory-policy", "allkeys-lru"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    env_file:
+      - path: ./backend/.env
+        required: false   # without it the API starts but OpenAI features are disabled
+    environment:
+      QDRANT_URL: http://qdrant:6333
+      QDRANT_PATH: ""
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://localhost:8080}
+      DATA_DIR: /app/data
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - backend_data:/app/data            # SQLite (documents registry, evaluations)
+      - hf_cache:/app/.cache/huggingface  # reranker model, downloaded once
+    depends_on:
+      qdrant:
+        condition: service_healthy
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        # The browser calls the backend directly, so this is the host-visible URL.
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+  backend_data:
+  hf_cache:
