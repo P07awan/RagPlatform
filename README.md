@@ -419,6 +419,9 @@ npm test ; npm run lint ; npm run typecheck ; npm run build
 
 ## Deployment
 
+**Full step-by-step guide (Qdrant Cloud database, Render, Vercel, Redis, LangSmith,
+verification, troubleshooting): [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).** Summary:
+
 **Backend → Render** (`render.yaml` blueprint provided):
 1. New → Blueprint → select the repo (or a Docker web service with root `backend/`).
 2. Set secrets: `OPENAI_API_KEY`, `API_KEY`, `QDRANT_URL` + `QDRANT_API_KEY` (use **Qdrant Cloud** –
@@ -426,7 +429,8 @@ npm test ; npm run lint ; npm run typecheck ; npm run build
 3. Health check path `/api/v1/health`. Start command is the Dockerfile `CMD` (honours `$PORT`).
 4. The blueprint mounts a 1 GB persistent disk at `/app/data` for SQLite metadata and the model cache;
    without a disk, document/evaluation history resets on each deploy (vectors in Qdrant Cloud persist).
-5. Choose an instance with ≥1 GB RAM for the cross-encoder. Render terminates TLS (HTTPS).
+5. The blueprint uses the `1c-2g` plan (2 GB RAM) for PyTorch and the cross-encoder; disks need a
+   paid instance. Render terminates TLS (HTTPS).
 6. Optional: `REDIS_URL` to a reachable Redis (e.g. Render Key Value) and `ENABLE_CACHE=true`.
 
 **Frontend → Vercel** (`frontend/vercel.json` provided):
