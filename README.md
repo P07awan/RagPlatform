@@ -11,7 +11,7 @@ dependencies, Dockerfiles and deployment targets.
 ---
 
 ## Contents
-1. [Architecture](#architecture) · 2. [Features](#features) · 3. [Tech stack](#technology-stack)
+1. [Architecture](#architecture) · [Data flow](#data-flow) · [How it works](#how-it-works) · 2. [Features](#features) · 3. [Tech stack](#technology-stack)
 4. [Prerequisites](#prerequisites) · 5. [Installation (Windows PowerShell)](#installation-windows-powershell)
 6. [Environment variables](#environment-variables) · 7. [OpenAI setup](#openai-api-setup)
 8. [Qdrant](#local-qdrant-setup) · 9. [Redis](#optional-redis-setup) · 10. [LangSmith](#optional-langsmith-setup)
@@ -52,6 +52,64 @@ Request flow in detail:
 * **SQLite** stores the document registry (ingestion status), evaluation runs/results and a
   bounded chat-activity log for the dashboard.
 * **LangSmith** (optional) traces each LangGraph run and each OpenAI call.
+
+## Data flow
+
+```mermaid
+flowchart LR
+    U(["User"]) -->|"files, questions"| FE["Frontend<br/>React SPA"]
+    FE -->|"HTTPS + X-API-Key<br/>JSON / multipart"| API["FastAPI backend<br/>auth, rate limit, validation"]
+    API -->|"JSON + SSE stream"| FE
+
+    API -->|"upload"| ING["Ingestion<br/>validate, extract, clean, chunk"]
+    ING -->|"chunk text"| OAI{{"OpenAI"}}
+    OAI -->|"embeddings"| ING
+    ING -->|"vectors + chunk text + metadata"| QD[("Qdrant")]
+    ING -->|"tokens"| BM[("BM25 index<br/>in memory")]
+    ING -->|"status"| DB[("SQLite")]
+
+    API -->|"question"| RAG["LangGraph RAG pipeline"]
+    RAG -->|"query vector"| QD
+    RAG -->|"keywords"| BM
+    RAG -->|"fuse + rerank"| CE["Cross-encoder"]
+    RAG -->|"question + top passages"| OAI
+    OAI -->|"streamed answer"| RAG
+    RAG <-->|"optional cache"| RD[("Redis")]
+    RAG -->|"chat activity"| DB
+
+    API -->|"evaluation run"| EV["RAGAS evaluation"]
+    EV -->|"each test question"| RAG
+    EV -->|"judge prompts"| OAI
+    EV -->|"scores + results"| DB
+
+    QD -.->|"rebuild on startup"| BM
+```
+
+Detailed diagrams (ingestion, streaming chat sequence, LangGraph nodes, evaluation, deletion,
+startup and recovery, what is stored where) and a step-by-step explanation of how each part
+works are in **[docs/DATA_FLOW.md](docs/DATA_FLOW.md)**.
+
+## How it works
+
+1. **Upload.** You drop PDF/TXT/Markdown files on the Documents page. The backend checks type,
+   content and size, skips exact duplicates, and processes each file in the background.
+2. **Index.** Text is extracted (page by page for PDFs), cleaned and split into ~800-character
+   chunks with overlap. Each chunk is embedded with OpenAI and stored in Qdrant together with
+   its text and source metadata; the BM25 keyword index is updated at the same time. The
+   document shows `indexed` only after Qdrant confirms the write.
+3. **Ask.** A question is searched two ways at once: by meaning (vector search in Qdrant) and
+   by keywords (BM25). The two ranked lists are merged with Reciprocal Rank Fusion, and a
+   cross-encoder re-scores the best candidates to keep the 4 most relevant chunks.
+4. **Answer.** If nothing relevant was found, the app says so without calling the model.
+   Otherwise the model receives the question plus the numbered chunks, with instructions to
+   answer only from them and cite them as `[1]`, `[2]`. The answer streams to the browser
+   token by token; the sources panel fills in before the first token.
+5. **Verify citations.** Every `[n]` in the answer is checked against the chunks that were
+   actually retrieved; invalid markers are removed and each citation shows filename, page
+   (when known) and an excerpt.
+6. **Measure.** The Evaluations page runs a dataset of questions with reference answers through
+   the same pipeline and scores faithfulness, answer relevancy, context precision and context
+   recall with RAGAS, saving per-question results for inspection and export.
 
 ## Features
 
