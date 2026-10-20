@@ -2,6 +2,8 @@
 .env
 .env.*
 !.env.example
+# Public, non-secret frontend build config (backend URL only)
+!frontend/.env.production
 
 # Python
 __pycache__/

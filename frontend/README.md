@@ -47,5 +47,7 @@ tests/          Vitest suites
 ## Deployment (Vercel)
 
 Root directory `frontend`, set `VITE_API_BASE_URL` to the deployed backend (`https://…/api/v1`).
+`.env.production` holds the production default used by `vite build` when Vercel does not set it;
+`npm run dev` ignores that file and keeps using `.env` / `http://localhost:8000/api/v1`.
 `vercel.json` adds the SPA rewrite. Docker alternative: `docker build --build-arg
 VITE_API_BASE_URL=https://api.example.com/api/v1 -t rag-frontend .` (nginx on port 8080).

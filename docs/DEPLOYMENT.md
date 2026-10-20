@@ -149,8 +149,11 @@ Render terminates HTTPS for you; the container itself serves plain HTTP on `$POR
    `npm run build` and output directory `dist` (also set in `vercel.json`).
 3. Under **Environment Variables** add:
    ```
-   VITE_API_BASE_URL = https://rag-platform-api.onrender.com/api/v1
+   VITE_API_BASE_URL = https://ragplatform.onrender.com/api/v1
    ```
+   Apply it to the **Production** (and **Preview**, if used) environments. The same value is
+   committed in `frontend/.env.production` as a fallback, so a production build never points at
+   `localhost`; a value set in Vercel takes precedence over that file.
    This value is compiled into the JavaScript and is public. That is fine: it is only the API
    address. Never add the OpenAI key or the application API key here.
 4. Click **Deploy**, then copy the production URL, e.g. `https://rag-platform.vercel.app`.

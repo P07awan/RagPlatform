@@ -1,10 +1,28 @@
 import type { ApiErrorBody } from '../types/api';
 
+// Local-development fallback only. Production builds get VITE_API_BASE_URL from the
+// Vercel project settings, or from the committed frontend/.env.production.
 const DEFAULT_BASE_URL = 'http://localhost:8000/api/v1';
+const API_PREFIX = '/api/v1';
 
-export const API_BASE_URL: string = (
-  (import.meta.env.VITE_API_BASE_URL as string | undefined) || DEFAULT_BASE_URL
-).replace(/\/+$/, '');
+/**
+ * Trim whitespace and trailing slashes, and add the /api/v1 prefix when only an origin was
+ * configured (e.g. "https://api.example.com"), so paths never end up as "//health" or miss
+ * the prefix. A value that already contains a path is used unchanged (no duplicate prefix).
+ */
+export function normalizeBaseUrl(raw: string): string {
+  const url = raw.trim().replace(/\/+$/, '');
+  try {
+    if (new URL(url).pathname === '/') return `${url}${API_PREFIX}`;
+  } catch {
+    /* relative or non-absolute value – use as-is */
+  }
+  return url;
+}
+
+export const API_BASE_URL: string = normalizeBaseUrl(
+  (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim() || DEFAULT_BASE_URL,
+);
 
 const API_KEY_STORAGE = 'rag.apiKey';
 
